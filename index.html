@@ -65,7 +65,7 @@
             if(link) formData.append('link', link);
 
             try {
-                const response = await fetch('http://localhost:5001/auditar', { method: 'POST', body: formData });
+                const response = await fetch('http://https://iecct-sv-app-1.onrender.com/auditar', { method: 'POST', body: formData });
                 const data = await response.json();
                 
                 // Mostrar datos
@@ -96,4 +96,5 @@
         }
     </script>
 </body>
+
 </html>
