@@ -4,5 +4,4 @@ mediapipe
 opencv-python-headless
 openai
 openai-whisper
-gdown
 gunicorn
