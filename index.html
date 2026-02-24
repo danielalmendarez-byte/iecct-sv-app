@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>IECCT-SV AI | Auditoría Real</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body class="bg-slate-900 text-white font-sans">
+
+    <div class="max-w-5xl mx-auto py-10 px-6">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-bold text-blue-400">IECCT-SV AI Auditor</h1>
+            <p class="text-slate-400">Evaluación Automática de Calidez Humana en El Salvador</p>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- PANEL CARGA -->
+            <div class="bg-slate-800 p-8 rounded-2xl border border-slate-700">
+                <h2 class="text-xl font-bold mb-4">1. Cargar Teleconsulta</h2>
+                <div class="space-y-4">
+                    <input type="file" id="video-file" class="w-full text-sm text-slate-400 file:bg-blue-600 file:text-white file:px-4 file:py-2 file:rounded-full file:border-0 hover:file:bg-blue-500">
+                    <div class="text-center text-slate-500 italic">o</div>
+                    <input type="text" id="video-link" placeholder="Link de Google Drive..." class="w-full bg-slate-900 border border-slate-700 p-3 rounded-lg outline-none focus:border-blue-500">
+                    <button onclick="procesar()" id="btn-main" class="w-full bg-blue-600 py-4 rounded-xl font-bold text-lg hover:bg-blue-500 transition">INICIAR IA</button>
+                </div>
+            </div>
+
+            <!-- PANEL RESULTADOS -->
+            <div id="panel-resultados" class="bg-slate-800 p-8 rounded-2xl border border-slate-700 opacity-30">
+                <h2 class="text-xl font-bold mb-4">2. Inferencia de la IA</h2>
+                <div id="loader" class="hidden text-blue-400 animate-pulse mb-4">Procesando video y audio (esto puede tardar)...</div>
+                
+                <div class="space-y-4 text-sm" id="metricas">
+                    <div class="flex justify-between"><span>Lenguaje (Dominio 1):</span> <span id="val-v" class="font-bold">--</span></div>
+                    <div class="flex justify-between"><span>Presencia (Dominio 2):</span> <span id="val-nv" class="font-bold">--</span></div>
+                    <div class="mt-4 p-4 bg-slate-900 rounded border border-slate-700 italic text-slate-400" id="val-resumen">
+                        Esperando análisis...
+                    </div>
+                </div>
+
+                <div class="mt-8 space-y-3 hidden" id="acciones">
+                    <button onclick="generarPDF()" class="w-full bg-emerald-600 py-3 rounded-lg font-bold">GENERAR REPORTE</button>
+                    <button onclick="location.reload()" class="w-full bg-slate-700 py-3 rounded-lg font-bold">NUEVA AUDITORÍA</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function procesar() {
+            const file = document.getElementById('video-file').files[0];
+            const link = document.getElementById('video-link').value;
+            const btn = document.getElementById('btn-main');
+
+            if(!file && !link) return alert("Selecciona un video o pega un link.");
+
+            btn.disabled = true;
+            btn.innerText = "PROCESANDO...";
+            document.getElementById('loader').classList.remove('hidden');
+            document.getElementById('panel-resultados').style.opacity = "1";
+
+            const formData = new FormData();
+            if(file) formData.append('video', file);
+            if(link) formData.append('link', link);
+
+            try {
+                const response = await fetch('http://localhost:5001/auditar', { method: 'POST', body: formData });
+                const data = await response.json();
+                
+                // Mostrar datos
+                document.getElementById('val-v').innerText = (data.verbal.acomodacion + data.verbal.validacion + data.verbal.cierre) / 3 + "/5";
+                document.getElementById('val-nv').innerText = data.no_verbal + "/5";
+                document.getElementById('val-resumen').innerText = data.verbal.analisis_resumen;
+                
+                document.getElementById('loader').classList.add('hidden');
+                document.getElementById('acciones').classList.remove('hidden');
+                btn.innerText = "ANÁLISIS COMPLETADO";
+            } catch (e) {
+                alert("Error en el servidor de IA. Asegúrate de que app.py esté corriendo.");
+                btn.disabled = false;
+            }
+        }
+
+        function generarPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.setFontSize(20);
+            doc.text("Reporte IECCT-SV AI", 20, 20);
+            doc.setFontSize(12);
+            doc.text("Resumen de Calidez Humana:", 20, 40);
+            doc.text(document.getElementById('val-resumen').innerText, 20, 50, { maxWidth: 170 });
+            doc.text("Puntaje Dominio Verbal: " + document.getElementById('val-v').innerText, 20, 80);
+            doc.text("Puntaje Dominio No Verbal: " + document.getElementById('val-nv').innerText, 20, 90);
+            doc.save("Reporte_Auditoria_Salud.pdf");
+        }
+    </script>
+</body>
+</html>
