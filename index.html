@@ -48,40 +48,52 @@
     </div>
 
     <script>
-        async function procesar() {
-            const file = document.getElementById('video-file').files[0];
-            const link = document.getElementById('video-link').value;
-            const btn = document.getElementById('btn-main');
+       async function procesar() {
+    const fileInput = document.getElementById('video-file');
+    const btn = document.getElementById('btn-main');
 
-            if(!file && !link) return alert("Selecciona un video o pega un link.");
+    if (!fileInput.files[0]) return alert("Selecciona un video");
 
-            btn.disabled = true;
-            btn.innerText = "PROCESANDO...";
-            document.getElementById('loader').classList.remove('hidden');
-            document.getElementById('panel-resultados').style.opacity = "1";
+    btn.disabled = true;
+    btn.innerText = "CONECTANDO...";
 
-            const formData = new FormData();
-            if(file) formData.append('video', file);
-            if(link) formData.append('link', link);
+    const formData = new FormData();
+    formData.append('video', fileInput.files[0]);
 
-            try {
-                const response = await fetch('http://https://iecct-sv-app-3.onrender.com/auditar', { method: 'POST', body: formData });
-                const data = await response.json();
-                
-                // Mostrar datos
-                document.getElementById('val-v').innerText = (data.verbal.acomodacion + data.verbal.validacion + data.verbal.cierre) / 3 + "/5";
-                document.getElementById('val-nv').innerText = data.no_verbal + "/5";
-                document.getElementById('val-resumen').innerText = data.verbal.analisis_resumen;
-                
-                document.getElementById('loader').classList.add('hidden');
-                document.getElementById('acciones').classList.remove('hidden');
-                btn.innerText = "ANÁLISIS COMPLETADO";
-            } catch (e) {
-                alert("Error en el servidor de IA. Asegúrate de que app.py esté corriendo.");
-                btn.disabled = false;
-            }
+    // --- REEMPLAZA ESTA URL CON TU LINK DE RENDER ---
+    const URL_DE_RENDER = "https://tu-app-en-render.onrender.com/auditar"; 
+
+    try {
+        console.log("Iniciando petición a:", URL_DE_RENDER);
+        
+        const response = await fetch(URL_DE_RENDER, {
+            method: 'POST',
+            body: formData
+            // IMPORTANTE: No añadas Headers manuales, el navegador lo hace solo con FormData
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Servidor respondió con código ${response.status}: ${errorText}`);
         }
 
+        const data = await response.json();
+        console.log("Respuesta recibida:", data);
+        
+        // Aquí llenas tus resultados (Dominio 1, Dominio 2, etc.)
+        document.getElementById('val-resumen').innerText = data.verbal.resumen;
+        document.getElementById('val-nv').innerText = data.no_verbal + " / 5";
+        document.getElementById('acciones').classList.remove('hidden');
+        btn.innerText = "ANÁLISIS COMPLETADO";
+
+    } catch (e) {
+        console.error("Error detallado:", e);
+        // ESTO NOS DIRÁ EL ERROR REAL:
+        alert("FALLO DE CONEXIÓN: " + e.message + "\n\nVerifica que el link de Render en el código sea correcto.");
+        btn.disabled = false;
+        btn.innerText = "REINTENTAR";
+    }
+}
         function generarPDF() {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
@@ -98,4 +110,5 @@
 </body>
 
 </html>
+
 
