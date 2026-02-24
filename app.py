@@ -10,40 +10,42 @@ from openai import OpenAI
 app = Flask(__name__)
 CORS(app)
 
-# Configuración OpenAI vía Variable de Entorno (o pega tu clave aquí)
+# Configuración OpenAI (Usa variable de entorno en Render para seguridad)
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", "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"))
 
-# --- CARGA DE MEDIAPIPE CON SEGURIDAD ---
-mp_face_mesh = None
+# --- CARGA PROTEGIDA DE MEDIAPIPE ---
+face_mesh_engine = None
+
 try:
     import mediapipe as mp
-    mp_face_mesh = mp.solutions.face_mesh
-    print("MediaPipe cargado exitosamente.")
-except Exception as e:
-    print(f"Aviso: MediaPipe no disponible en este servidor. Error: {e}")
-
-# --- CARGA DE WHISPER ---
-print("Cargando Whisper...")
-model_stt = whisper.load_model("base")
-
-# Inicializar motor de rostro SOLO si MediaPipe cargó bien
-face_mesh_engine = None
-if mp_face_mesh:
-    try:
-        face_mesh_engine = mp_face_mesh.FaceMesh(
+    # Intentamos inicializar el motor solo si la librería existe
+    if hasattr(mp, 'solutions') and hasattr(mp.solutions, 'face_mesh'):
+        face_mesh_engine = mp.solutions.face_mesh.FaceMesh(
             static_image_mode=False,
             max_num_faces=1,
             refine_landmarks=True,
             min_detection_confidence=0.5
         )
-    except Exception as e:
-        print(f"No se pudo iniciar el motor de rostros: {e}")
-        face_mesh_engine = None
+        print("Motor de MediaPipe cargado correctamente.")
+    else:
+        print("Aviso: MediaPipe no tiene el atributo 'solutions' en este entorno.")
+except Exception as e:
+    print(f"Aviso: No se pudo cargar MediaPipe (Visión Artificial desactivada). Error: {e}")
+
+# --- CARGA DE WHISPER (Voz a Texto) ---
+print("Cargando Whisper... esto puede tardar unos minutos.")
+try:
+    model_stt = whisper.load_model("base")
+    print("Whisper cargado correctamente.")
+except Exception as e:
+    print(f"Error cargando Whisper: {e}")
 
 def analizar_video(path):
-    # --- ANÁLISIS NO VERBAL (Solo si el motor funciona) ---
+    # --- DOMINIO 2: ANÁLISIS NO VERBAL ---
+    # Si el motor falló al cargar, devolvemos un puntaje base (o 0)
     score_nv = 0.0
-    if face_mesh_engine:
+    
+    if face_mesh_engine is not None:
         try:
             cap = cv2.VideoCapture(path)
             frames_con_rostro = 0
@@ -52,22 +54,44 @@ def analizar_video(path):
                 ret, frame = cap.read()
                 if not ret: break
                 total_frames += 1
-                if total_frames % 15 == 0: # Saltamos más frames para no saturar el servidor
+                if total_frames % 20 == 0: # Analizamos pocos frames para ahorrar memoria en Render
                     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     results = face_mesh_engine.process(rgb)
-                    if results.multi_face_landmarks:
+                    if results and results.multi_face_landmarks:
                         frames_con_rostro += 1
             cap.release()
-            score_nv = round(min(5, (frames_con_rostro / (total_frames / 15)) * 5), 1) if total_frames > 0 else 0
-        except:
+            # Escala 1-5
+            if total_frames > 0:
+                score_nv = round(min(5, (frames_con_rostro / (total_frames / 20)) * 5), 1)
+        except Exception as vis_err:
+            print(f"Error en análisis visual: {vis_err}")
             score_nv = 0.0
+    else:
+        print("Saltando análisis visual (Motor no disponible).")
+        score_nv = 0.0
 
-    # --- ANÁLISIS VERBAL (Siempre funciona) ---
-    print("Transcribiendo...")
-    texto = model_stt.transcribe(path, language="es")["text"]
+    # --- DOMINIO 1: ANÁLISIS VERBAL (WHISPER + GPT-4o) ---
+    print("Iniciando transcripción de audio...")
+    transcription = model_stt.transcribe(path, language="es")["text"]
     
-    print("Evaluando calidez...")
-    prompt = f"Evalúa calidez (IECCT-SV El Salvador) en JSON: {texto}"
+    print("Consultando a GPT-4o para evaluación IECCT-SV...")
+    prompt = f"""
+    Evalúa la calidez de esta teleconsulta en El Salvador usando el instrumento IECCT-SV.
+    Transcripción: "{transcription}"
+    
+    Analiza y califica de 1 a 5:
+    1. Acomodación del lenguaje.
+    2. Validación emocional.
+    3. Respeto y cercanía.
+    
+    Responde estrictamente en este formato JSON:
+    {{
+      "acomodacion": 0,
+      "validacion": 0,
+      "respeto": 0,
+      "resumen": "Resumen breve del análisis verbal."
+    }}
+    """
     
     response = client.chat.completions.create(
         model="gpt-4o",
@@ -75,27 +99,34 @@ def analizar_video(path):
         response_format={ "type": "json_object" }
     )
     
+    verbal_result = json.loads(response.choices[0].message.content)
+
     return {
-        "verbal": json.loads(response.choices[0].message.content),
+        "verbal": verbal_result,
         "no_verbal": score_nv,
-        "texto": texto
+        "texto": transcription
     }
 
 @app.route('/auditar', methods=['POST'])
 def auditar():
     if 'video' not in request.files:
-        return jsonify({"error": "No hay video"}), 400
+        return jsonify({"error": "No se recibió archivo de video"}), 400
+    
     file = request.files['video']
     temp_path = "video_temp.mp4"
     file.save(temp_path)
+    
     try:
-        return jsonify(analizar_video(temp_path))
+        resultado = analizar_video(temp_path)
+        return jsonify(resultado)
     except Exception as e:
+        print(f"Error en auditoría: {e}")
         return jsonify({"error": str(e)}), 500
     finally:
-        if os.path.exists(temp_path): os.remove(temp_path)
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
 if __name__ == '__main__':
-    # Usar puerto de Render
+    # Puerto dinámico para Render
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
