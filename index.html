@@ -61,12 +61,12 @@
     formData.append('video', fileInput.files[0]);
 
     // --- REEMPLAZA ESTA URL CON TU LINK DE RENDER ---
-    const URL_DE_RENDER = "https://tu-app-en-render.onrender.com/auditar"; 
+    const URL_DE_RENDER = "https://iecct-sv-app-3.onrender.com/auditar"; 
 
     try {
         console.log("Iniciando petición a:", URL_DE_RENDER);
         
-        const response = await fetch(URL_DE_RENDER, {
+        const response = await fetch('https://iecct-sv-app-3.onrender.com/auditar', {
             method: 'POST',
             body: formData
             // IMPORTANTE: No añadas Headers manuales, el navegador lo hace solo con FormData
@@ -110,5 +110,6 @@
 </body>
 
 </html>
+
 
 
