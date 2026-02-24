@@ -1,0 +1,21 @@
+# Usamos una imagen de Python estable
+FROM python:3.10-slim
+
+# Instalamos las librerías del sistema que MediaPipe y OpenCV necesitan
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Establecemos el directorio de trabajo
+WORKDIR /app
+
+# Copiamos los archivos del proyecto
+COPY . .
+
+# Instalamos las librerías de Python
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Ejecutamos la aplicación con Gunicorn
+CMD ["gunicorn", "-b", "0.0.0.0:10000", "app:app"]
