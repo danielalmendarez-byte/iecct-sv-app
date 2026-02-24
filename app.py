@@ -1,20 +1,24 @@
 import os
 import sys
+import cv2
+import whisper
+import json
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from openai import OpenAI
 
-# --- BLOQUE DE CARGA MAESTRA ---
+# --- CARGA ESTÁNDAR PARA LINUX ---
 try:
     import mediapipe as mp
-    from mediapipe.python.solutions import face_mesh as mp_face_mesh
-    print("LOGRADO: MediaPipe cargado correctamente.")
-except (ImportError, AttributeError):
-    print("Aviso: Error de ruta estándar, aplicando parche de carga profunda...")
-    try:
-        # Forzamos la carga desde la carpeta site-packages directamente
-        import mediapipe.python.solutions.face_mesh as mp_face_mesh
-        print("LOGRADO: Parche de carga profunda exitoso.")
-    except Exception as e:
-        print(f"ERROR CRÍTICO: No se pudo inicializar MediaPipe. Detalle: {e}")
-        sys.exit()
+    # Usamos la ruta más compatible
+    mp_face_mesh = mp.solutions.face_mesh
+    print("MediaPipe cargado correctamente en servidor Linux.")
+except Exception as e:
+    print(f"Error cargando MediaPipe: {e}")
+    # No cerramos el sistema para que al menos Whisper pueda funcionar
+    mp_face_mesh = None
+
+# ... (resto del código de Flask e IA)
 
 # --- IMPORTACIÓN DE LIBRERÍAS RESTANTES ---
 import cv2
@@ -89,4 +93,5 @@ def auditar():
 
 if __name__ == '__main__':
     print("\n--- SERVIDOR ACTIVO EN PORT 5001 ---")
+
     app.run(port=5001)
